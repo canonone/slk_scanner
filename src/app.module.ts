@@ -6,6 +6,7 @@ import { WebhookModule } from './webhook/webhook.module'
 import { ScannerModule } from './scanner/scanner.module'
 import { MarketDataModule } from './market-data/market-data.module'
 import { StateModule } from './state/state.module'
+import { SMTModule } from './smt/smt.module'
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { StateModule } from './state/state.module'
     ScannerModule,
     MarketDataModule,
     StateModule,
+    SMTModule,
   ],
 })
 export class AppModule {}
