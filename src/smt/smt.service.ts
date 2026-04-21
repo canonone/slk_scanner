@@ -51,52 +51,54 @@ export class SMTService {
     }
   }
 
-  private async scanPair(config: SMTPairConfig): Promise<void> {
-    const { symbol1, symbol2, timeframe, fractalPeriod } = config
-    const pairKey = `${symbol1}-${symbol2}`
+ private async scanPair(config: SMTPairConfig): Promise<void> {
+  const { symbol1, symbol2, timeframe, fractalPeriod } = config
+  const pairKey = `${symbol1}-${symbol2}`
 
-    // Fetch candles for both symbols
-    // Need enough candles for fractal detection — 100 is plenty
-    const [candles1, candles2] = await Promise.all([
-      this.marketData.getCandles(symbol1, timeframe as any, 100),
-      this.marketData.getCandles(symbol2, timeframe as any, 100),
-    ])
+  // Increased to 200 to give fractal period 5 enough data
+  const [candles1, candles2] = await Promise.all([
+    this.marketData.getCandles(symbol1, timeframe as any, 200),
+    this.marketData.getCandles(symbol2, timeframe as any, 200),
+  ])
 
-    if (candles1.length < fractalPeriod * 2 + 1 || candles2.length < fractalPeriod * 2 + 1) {
-      this.logger.warn(`Not enough candles for ${pairKey}`)
-      return
-    }
-
-    // Reverse to chronological order (oldest first)
-    const ordered1 = [...candles1].reverse()
-    const ordered2 = [...candles2].reverse()
-
-    // Align candles by datetime
-    const aligned = this.alignCandles(ordered1, ordered2)
-    if (aligned.length < fractalPeriod * 2 + 1) {
-      this.logger.warn(`Not enough aligned candles for ${pairKey}`)
-      return
-    }
-
-    const result = this.detectSMT(aligned, fractalPeriod)
-
-    if (!result.detected) return
-
-    // Avoid sending duplicate alerts for the same signal
-    const lastAlert = this.lastAlertTime.get(pairKey)
-    if (lastAlert === result.datetime) {
-      this.logger.log(`${pairKey} SMT already alerted for ${result.datetime}`)
-      return
-    }
-
-    this.lastAlertTime.set(pairKey, result.datetime)
-    this.logger.log(
-      `🎯 SMT ${result.direction} divergence detected: ${pairKey} at ${result.datetime}`,
-    )
-
-    const message = this.buildMessage(config, result)
-    await this.telegram.sendMessage(message)
+  if (candles1.length < fractalPeriod * 2 + 1 || candles2.length < fractalPeriod * 2 + 1) {
+    this.logger.warn(`Not enough candles for ${pairKey}`)
+    return
   }
+
+  // Reverse to chronological order (oldest first)
+  const ordered1 = [...candles1].reverse()
+  const ordered2 = [...candles2].reverse()
+
+  // Align candles by datetime
+  const aligned = this.alignCandles(ordered1, ordered2)
+  if (aligned.length < fractalPeriod * 2 + 1) {
+    this.logger.warn(`Not enough aligned candles for ${pairKey}`)
+    return
+  }
+
+  const result = this.detectSMT(aligned, fractalPeriod)
+
+  if (!result.detected) {
+    this.logger.log(`No SMT divergence detected for ${pairKey}`)
+    return
+  }
+
+  // Avoid sending duplicate alerts for the same signal
+  const lastAlert = this.lastAlertTime.get(pairKey)
+  if (lastAlert === result.datetime) {
+    this.logger.log(`${pairKey} SMT already alerted for ${result.datetime}`)
+    return
+  }
+
+  this.lastAlertTime.set(pairKey, result.datetime)
+  this.logger.log(
+    `🎯 SMT ${result.direction} divergence detected: ${pairKey} at ${result.datetime}`,
+  )
+
+  const message = this.buildMessage(config, result)
+  await this.telegram.sendMessage(message)
+}
 
   private alignCandles(
     candles1: OHLCVCandle[],
